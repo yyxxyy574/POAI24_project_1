@@ -1,42 +1,343 @@
 import numpy as np
-from copy import deepcopy
 import json
 import random
 import itertools
 
-from Solver.astar import *
+from Solver.astar import astar_test
 
 class Map:
-    def __init__(self, game_mode="all", map_mode=None, map_matrix=None, player_pos=(0, 0)):
+    def __init__(self, game_mode="all", map_mode=None):
+        self.game_mode = game_mode
+        self.move_sequence = []
+        self.size = (0, 0)
+        self.walls = set()
+        self.holes = dict()
+        self.boxes = dict()
+        self.player = player
+        
         # Get map information given game mode and map mode
         if map_mode == "demo":
-            map_matrix, player_pos = Map.read_json('.\Maps\map_0.json')
+            size, walls, holes, boxes, player = Map.read_json('.\Maps\map_0.json')
+            self.build_from_map_info(size, walls, holes, boxes, player)
         if map_mode == "library":
             id = random.randint(0, 3)
-            map_matrix, player_pos = Map.read_json(f'.\Maps\map_{id}.json')
+            size, walls, holes, boxes, player = Map.read_json(f'.\Maps\map_{id}.json')
+            self.build_from_map_info(size, walls, holes, boxes, player)
         if map_mode == "random":
-            map_matrix, player_pos = Map.random_build(game_mode=game_mode)
-        # Build map according to map information
-        self.map_matrix = map_matrix
-        self.row = len(map_matrix)
-        self.col = len(map_matrix[0])
-        self.palyer_x = player_pos[0]
-        self.palyer_y = player_pos[1]
-        self.game_mode = game_mode
-        self.timeline = []
-        
-    def is_dead(self):
-        if self.mode == "all":
-            empty_boxes = np.where(self.map_matrix in range(2, 6))
+            self.random_build(game_mode=game_mode)
+                
+    def build_from_map_info(self, size=(0, 0), walls=set(), holes=[], boxes=[], player=(0, 0)):
+        """
+        Build map according to map information
+        """
+        # Basic information
+        self.size = size
+        self.walls = walls
+        self.holes = holes
+        self.boxes = boxes
+        self.player = player
+        # Set map matrix
+        self.map_matrix = np.zeros([self.size[0], self.size[1]])
+        for wall in self.walls:
+            self.map_matrix[wall[1]][wall[0]] = 1
+        for hole in self.holes:
+            hole_pos = holes[hole]
+            self.map_matrix[hole_pos[1]][hole_pos[0]] = 2
+        for box in self.boxes:
+            box_pos = boxes[box]
+            if self.map_matrix[box_pos[1]][box_pos[0]] == 0:
+                self.map_matrix[box_pos[1]][box_pos[0]] = 3
+            else:
+                self.map_matrix[box_pos[1]][box_pos[0]] = 4  
+                
+    def is_vaild_move(self, action):
+        new_player = (self.player[0] + action[0], self.palyer[1] + action[1])
+        if self.map_matrix[new_player[1]][new_player[0]] in (3, 4):
+            new_box_pos = (self.player[0] + 2 * action[0], self.player[1] + 2 * action[1])
+            return self.map_matrix[new_box_pos[1]][new_box_pos[0]] in (0, 2)
         else:
-            
+            return self.map_matrix[new_player[1]][new_player[0]] in (0, 2)
+        
+    def vaild_moves(self):
+        available_moves = [(0, -1), (-1, 0), (0, 1), (1, 0)]
+        vaild_moves = []
+        for action in available_moves:
+            if self.is_valid_pos(action):
+                vaild_moves.append(action)
+        return vaild_moves
     
+    def move(self, action):
+        if not self.is_vaild_move(action):
+            return False
+        self.move_sequence.append(action)
+        self.player = (self.player[0] + action[0], self.palyer[1] + action[1])
+        if self.map_matrix[self.player[1]][self.player[0]] in (3, 4):
+            box_id = None
+            for box in self.boxes:
+                if self.boxes[box] == self.player:
+                    box_id = box
+                    break
+            if self.map_matrix[self.player[1]][self.player[0]] == 3:
+                self.map_matrix[self.player[1]][self.player[0]] = 0
+            else:
+                self.map_matrix[self.player[1]][self.player[0]] = 2
+            new_box_pos = (self.player[0] + action[0], self.player[1] + action[1])
+            if self.map_matrix[new_box_pos[1]][new_box_pos[0]] == 0:
+                self.map_matrix[new_box_pos[1]][new_box_pos[0]] = 3
+                self.boxes[box_id] = new_box_pos
+            else:
+                if self.game_mode == "all":
+                    self.map_matrix[new_box_pos[1]][new_box_pos[0]] = 4
+                    self.boxes[box_id] = new_box_pos
+                else:
+                    hole_id = None
+                    for hole in self.holes:
+                        if self.holes[hole] == new_box_pos:
+                            hole_id = hole
+                            break
+                    if box_id == hole_id:
+                        self.boxes.pop(box_id)
+                    else:
+                        self.map_matrix[new_box_pos[1]][new_box_pos[0]] = 4
+                        self.boxes[box_id] = new_box_pos
+                        
+    def cost(self):
+        cost = 0
+        if self.mode == "all":
+            sorted_holes_x = sorted(self.holes[hole][0] for hole in self.holes)
+            sorted_holes_y = sorted(self.holes[hole][1] for hole in self.holes)
+            sorted_boxes_x = sorted(self.boxes[box][0] for box in self.boxes)
+            sorted_boxes_y = sorted(self.boxes[box][1] for box in self.boxes)
+            for i in range(len(self.boxes)):
+                cost += np.abs(sorted_holes_x[i] - sorted_boxes_x[i]) + np.abs(sorted_holes_y[i] - sorted_boxes_y[i])
+        else:
+            for box in self.boxes:
+                cost += np.abs(self.holes[box][0] - self.boxes[box][0]) + np.abs(self.holes[box][1] - self.boxes[box][1])
+        return cost
+          
     def is_success(self):
-        empty_boxes = np.where(self.map_matrix in range(2, 6))
+        """
+        Judge if is success
+        """
+        empty_boxes = np.where(self.map_matrix == 3)
         if len(empty_boxes[0]) == 0:
             return True
         else:
-            return False
+            return False 
+    
+    def is_fail(self):
+        """
+        Judge if is fail
+        """
+        # 0 for box and 1 for wall
+        # 1
+        failures_1 = [
+            # 1_1
+            {(0, -1): 1, (-1, 0): 1},
+            # 1_2
+            {(1, 0): 1, (0, -1): 1},
+            # 1_3
+            {(0, 1): 1, (-1, 0): 1},
+            # 1_4
+            {(1, 0): 1, (0, 1): 1},
+        ]
+        # 2
+        failures_2 = [
+            # 2_1
+            {(1, 0): 1, (0, 1): 0, (1, 1): 1},
+            {(0, -1): 0, (1, -1): 1, (1, 0): 1},
+            # 2_2
+            {(0, -1): 1, (1, -1): 1, (1, 0): 0},
+            {(-1, -1): 1, (0, -1): 1, (-1, 0): 0},
+            # 2_3
+            {(-1, 0): 1, (-1, 1): 1, (0, 1): 0},
+            {(-1, -1): 1, (0, -1): 0, (-1, 0): 1},
+            # 2_4
+            {(1, 0): 0, (0, 1): 1, (1, 1): 1},
+            {(-1, 0): 0, (-1, 1): 1, (0, 1): 1},
+        ]
+        # 3
+        failures_3 = [
+            # 3_1_1
+            {(-1, 0): 1, (-1, 1): 0, (0, 1): 0},
+            {(0, -1): 1, (1, -1): 0, (1, 0): 0},
+            {(-1, -1): 1, (0, -1): 0, (-1, 0): 0},
+            # 3_1_2
+            {(1, 0): 1, (0, 1): 0, (1, 1): 0},
+            {(0, -1): 0, (1, -1): 1, (1, 0): 0},
+            {(-1, -1): 0, (0, -1): 1, (-1, 0): 0},
+            # 3_1_3
+            {(1, 0): 0, (0, 1): 1, (1, 1): 0},
+            {(-1, 0): 0, (-1, 1): 1, (0, 1): 0},
+            {(-1, -1): 0, (0, -1): 0, (-1, 0): 1},
+            # 3_1_4
+            {(1, 0): 0, (0, 1): 0, (1, 1): 1},
+            {(-1, 0): 0, (-1, 1): 0, (0, 1): 1},
+            {(0, -1): 0, (1, -1): 0, (1, 0): 1},
+            # 3_2_1
+            {(1, 0): 1, (-1, 1): 1, (0, 1): 0, (0, 2): 0, (1, 2): 1},
+            {(0, -1): 0, (1, -1): 1, (-1, 0): 1, (0, 1): 0, (1, 1): 1},
+            {(0, -2): 0, (1, -2): 1, (-1, -1): 1, (0, -1): 0, (1, 0): 1},
+            # 3_2_2
+            {(-1, 0): 1, (0, 1): 0, (1, 1): 1, (-1, 2): 1, (0, 2): 0},
+            {(-1, -1): 1, (0, -1): 0, (1, 0): 1, (-1, 1): 1, (0, 1): 0},
+            {(-1, 2): 1, (0, 2): 0, (1, 0): 1, (-1, 1): 1, (0, 1): 0},
+            # 3_2_3
+            {(0, -1): 1, (2, -1): 1, (1, 0): 0, (2, 0): 0, (1, 1): 1},
+            {(-1, -1): 1, (1, -1): 1, (-1, 0): 0, (1, 0): 0, (0, 1): 1},
+            {(-2, -1): 1, (0, -1): 1, (-2, 0): 0, (-1, 0): 0, (-1 , 1): 1},
+            # 3_2_3
+            {(0, 1): 1, (2, 1): 1, (1, 0): 0, (2, 0): 0, (1, -1): 1},
+            {(-1, 1): 1, (1, 1): 1, (-1, 0): 0, (1, 0): 0, (0, -1): 1},
+            {(-2, 1): 1, (0, 1): 1, (-2, 0): 0, (-1, 0): 0, (-1 , -1): 1},
+        ]
+        # 4
+        failures_4 = [
+            {(1, 0): 0, (0, 1): 0, (1, 1): 0},
+            {(-1, 0): 0, (-1, 1): 0, (0, 1): 0},
+            {(1, 0): 0, (1, -1): 0, (0, -1): 0},
+            {(0, -1): 0, (-1, -1): 0, (-1, 0): 0},
+        ]
+        
+        empty_boxes = np.where(self.map_matrix == 3)
+        failures = []
+        if len(empty_boxes) > 0:
+            failures += failures_1
+        if len(empty_boxes) > 1:
+            failures += failures_2
+        if len(empty_boxes) > 2:
+            failures += failures_3
+        if len(empty_boxes) > 3:
+            failures += failures_4
+        for empty_box in empty_boxes:
+            empty_box_pos = empty_boxes[empty_box]
+            is_fail = False
+            for failure in failures:
+                is_same = True
+                for surround in failure:
+                    if failure[surround] == 0:
+                        if self.map_matrix[empty_box_pos[1] + surround[1]][empty_box_pos[0] + surround[0]] not in (3, 4):
+                            is_same = False
+                            break
+                if is_same:
+                    # If it is the same as one of the fail situations, then fail
+                    is_fail = True
+                    break
+            if is_fail:
+                return True
+        return False
+    
+    def random_initialize(self):
+        """
+        Initialize a map randomly
+        """
+        # Random size
+        self.size = (random.randint(8, 12), random.randint(8, 12))
+        # Random number of boxes
+        box_num = random.randint(1, 4)
+        
+        # Initial a map
+        self.map_matrix = np.zeros(self.size)
+        # Surrounded by walls
+        self.map_matrix[0, :] = 1
+        self.walls.append(list(itertools.product(list(range(0, self.size[1])), [0])))
+        self.map_matrix[:, 0] = 1
+        self.walls.append(list(itertools.product([0], list(range(0, self.size[0])))))
+        self.map_matrix[-1, :] = 1
+        self.walls.append(list(itertools.product(list(range(0, self.size[1])), [self.size[0] - 1])))
+        self.map_matrix[:, -1] = 1
+        self.walls.append(list(itertools.product([self.size[1] - 1], list(range(0, self.size[0])))))
+        # Random walls
+        not_occupied = list(itertools.product(list(range(1, self.size[0] - 1)), list(range(1, self.size[1] - 1))))
+        for wall in random.sample(not_occupied, self.size):
+            self.map_matrix[wall[1]][wall[0]] = 1
+            self.walls.append(wall)
+        not_occupied = list(set(not_occupied) - self.walls)
+        # Random holes
+        for i in range(box_num):
+            while True:
+                hole = random.choice(not_occupied)
+                
+                if not is_surrounded(self.map_matrix, hole):
+                    # If not surrounded by walls
+                    self.map_matrix[hole[1]][hole[0]] = 2
+                    self.holes[chr(65 + i)] = hole
+                    break
+        # Random boxes
+        for i in range(box_num):
+            while True:
+                box = random.choice(not_occupied)
+                
+                if not is_surrounded(self.map_matrix, box):
+                    # If not surrounded by walls
+                    if (self.game_mode == "one") and (self.holes[chr(65 + i)] == box):
+                        # If in "one" mode the box is just at the position of the correspondent hole
+                        continue
+                    if self.map_matrix[box[1]][box[0]] == 2:
+                        # If there is a hole
+                        self.map_matrix[box[1]][box[0]] = 4
+                    else:
+                        # If there isn't a hole
+                        self.map_matrix[box[1]][box[0]] = 3
+                        
+                    if self.is_dead():
+                        # If this map is dead, then recover
+                        if self.map_matrix[box[1]][box[0]] == 4:
+                            self.map_matrix[box[1]][box[0]] = 2
+                        else:
+                            self.map_matrix[box[1]][box[0]] = 0
+                    else:
+                        # If this map is OK, then go on
+                        break
+        not_occupied = list(set(not_occupied) - set(self.boxes.values()))
+        # Random player position
+        while True:
+            self.player = random.choice(not_occupied)
+            
+            if not is_surrounded(self.map_matrix, self.player_pos):
+                break
+            
+    def random_build(self, time_limit=20, step_limit=100):
+        """
+        Build a map randomly
+        """
+        # Initialize an easy map
+        while True:
+            self.random_initialize()
+            result = astar_test(self, time_limit, step_limit)
+            if not result in range(3):
+                break
+        
+        # Add walls randomly to make the map more difficult
+        traceback = 0
+        while True:
+            open_places = np.where(self.map_matrix == 0)
+            if len(open_places[0]) == 0:
+                break
+            
+            while True:
+                id = random.randint(0, len(open_places[0]) - 1)
+                if (open_places[0][id] != self.player_pos[0]) or (open_places[1][id] != self.player_pos[1]):
+                    self.map_matrix[open_places[1][id]][open_places[0][id]] = 1
+                    # self.walls.add((open_places[0][id], open_places[0][id]))
+                    if not(self.is_fail()):
+                        break
+                    self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
+            result = astart_test(copy.deepcopy(self), time_limit, step_limit)
+            if result == 0:
+                # If no solution, return to previous map
+                traceback += 1
+                self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
+                if traceback > 3:
+                    break
+            elif result == 1:
+                # If it is beyond time, add this wall
+                self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
+                continue
+            elif result == 2:
+                # If it is beyond step, keep current map
+                self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
+                break
          
 def read_json(path):
     """
@@ -44,124 +345,25 @@ def read_json(path):
     """
     with open(path, 'r') as f:
         map_info = json.load(f)
-        map_matrix = map_info["matrix"]
-        player_pos = map_info["player_pos"]
-    return map_matrix, player_pos
+        size = map_info["size"]
+        walls = map_info["walls"]
+        holes = map_info["holes"]
+        boxes = map_info["boxes"]
+        player = map_info["player"]
+    return size, walls, holes, boxes, player
 
-def is_surrounded(map_matrix, pos):
-    # Up, down, left and right
-    surrounds = [(0, 1), (0, -1), (-1, 0), (1, 0)]
-    
+def is_valid_pos(map_matrix, pos):
     row = len(map_matrix)
     col = len(map_matrix[0])
+    return (0 <= pos[0] < col) and (0 <= pos[1] < row)
+
+def is_surrounded(map_matrix, pos):
+    # Up, left, down and right
+    surrounds = [(0, -1), (-1, 0), (0, 1), (1, 0)]
+    
     surrounded = True
     for surround in surrounds:
-        if (0 <= pos[0] + surround[0] < col) and (0 <= pos[1] + surround[1] < row):
-            if (map_matrix[pos[0] + surround[0]][pos[1] + surround[1]] == 0) or (map_matrix[pos[0] + surround[0]][pos[1] + surround[1]] in range(10, 14)):
+        if is_valid_pos((pos[0] + surround[0], pos[1] + surround[1])):
+            if map_matrix[pos[1] + surround[1]][pos[0] + surround[0]] in (0, 2):
                 surrounded = False
     return surrounded
-
-def random_initialize():
-    """
-    Initialize a map randomly
-    """
-    # Random size
-    size = random.randint(8, 12)
-    # Random number of boxes
-    box_num = random.randint(1, 4)
-    
-    # Initial a map
-    map_matrix = np.zeros((size, size))
-    # Surrounded by walls
-    map_matrix[0, :] = 1
-    map_matrix[:, 0] = 1
-    map_matrix[-1, :] = 1
-    map_matrix[:, -1] = 1
-    # Random walls
-    no_walls = list(itertools.product(list(range(1, size - 1)), list(range(1, size - 1))))
-    for wall in random.sample(no_walls, size):
-        map_matrix[wall[0]][wall[1]] = 1
-    # Random holes
-    for i in range(box_num):
-        while True:
-            hole = random.choice(no_walls)
-            
-            if (map_matrix[hole[0]][hole[1]] != 1) and (not is_surrounded(map_matrix, hole)):
-                # If not surrounded by walls
-                map_matrix[box[0]][box[1]] = 10 + i
-                break
-    # Random boxes
-    for i in range(box_num):
-        while True:
-            box = random.choice(no_walls)
-            
-            # If there is a wall, continue
-            if map_matrix[box[0]][box[1]] == 1:
-                continue
-            
-            original_value = map_matrix[box[0]][box[1]]
-            if map_matrix[box[0]][box[1]] in range(65, 65 + box_num):
-                # If there is a hole
-                map_matrix[box[0]][box[1]] = 6 + i
-            else:
-                # If there isn't a hole
-                map_matrix[box[0]][box[1]] = 2 + i
-                
-            if Map(map_matrix=map_matrix).is_dead():
-                # If this map is dead, then recover
-                map_matrix[box[0]][box[1]] = original_value
-            else:
-                # If this map is OK, then go on
-                break
-    # Random player position
-    while True:
-        player_pos = random.choice(no_walls)
-        
-        if (map_matrix[hole[0]][hole[1]] != 1)  and (map_matrix[hole[0]][hole[1]] not in range(2, 10)) and (not is_surrounded(map_matrix, player_pos)):
-            break
-        
-    return map_matrix, player_pos
-        
-def random_build(game_mode="all", timelimit=20, steplimit=100):
-    """
-    Build a map randomly
-    """
-    # Initialize an easy map
-    while True:
-        map_matrix, player_pos = random_initialize()
-        map = Map(game_mode=game_mode, map_matrix=map_matrix, player_pos=player_pos)
-        result = astar_test(map, timelimit, steplimit)
-        if not result in range(3):
-            break
-      
-    # Add walls randomly to make the map more difficult
-    traceback = 0
-    while True:
-        available_walls = np.where(map_matrix == 0)
-        if len(available_walls[0]) == 0:
-            break
-        
-        while True:
-            id = random.randint(0, len(available_walls[0]) - 1)
-            if (available_walls[0][id] != player_pos[0]) and (available_walls[1][id] != player_pos[1]):
-                break
-        new_map_matrix = deepcopy(map_matrix)
-        new_map_matrix[available_walls[0][id]][available_walls[1][id]] = 1
-        
-        map = Map(game_mode=game_mode, map_matrix=new_map_matrix, player_pos=player_pos)
-        result = astart_test(map, timelimit, steplimit)
-        if result == 0:
-            # If no solution, return to previous map
-            traceback += 1
-            if traceback > 3:
-                break
-        elif result == 1:
-            # If it is beyond time, add this wall
-            continue
-        elif result == 2:
-            # If it is beyond step, keep current map
-            break
-        else:
-            map_matrix[available_walls[0][id]][available_walls[1][id]] = 1
-            
-    return map_matrix, player_pos
