@@ -1,7 +1,6 @@
 from threading import Thread
 import os
 import pygame
-import copy
 
 from map import Map
 from Solver.astar import *
@@ -32,7 +31,7 @@ def StartMenu():
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         # Set the main interface
         screen.blit(pygame.transform.scale(icon, (80, 80)), (168, 10))
         font_title = pygame.font.SysFont('Cascadia mono', 64)
@@ -75,13 +74,18 @@ def InstructionsMenu():
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         # Set the main interface
         screen.blit(pygame.transform.scale(icon, (80, 80)), (168, 10))
         font_title = pygame.font.SysFont('Cascadia mono', 64)
         font_choice = pygame.font.SysFont('Cascadia mono', 32)
         title = font_title.render('Sokoban', True, (0, 255, 125), (53, 73, 94))
         screen.blit(title, (120, 100))
+        screen.blit(title, (120, 100))
+        keyboard = font_choice.render('1. Control by keyboard yourself', True, (40, 255, 40), (53, 73, 94))
+        screen.blit(keyboard, (50, 200))
+        search = font_choice.render('2. Click one algorithm to let AI search', True, (40, 255, 40), (53, 73, 94))
+        screen.blit(search, (15, 250))
         return_prev = font_choice.render('Return', True, (40, 255, 40), (53, 73, 94))
         screen.blit(return_prev, (170, 350))
         
@@ -112,7 +116,7 @@ def SelectModeMenu():
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         # Set the main interface
         screen.blit(pygame.transform.scale(icon, (80, 80)), (168, 10))
         font_title = pygame.font.SysFont('Cascadia mono', 64)
@@ -162,7 +166,7 @@ def SelectMapMenu(game_mode):
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         # Set the main interface
         screen.blit(pygame.transform.scale(icon, (80, 80)), (168, 10))
         font_title = pygame.font.SysFont('Cascadia mono', 64)
@@ -170,11 +174,13 @@ def SelectMapMenu(game_mode):
         title = font_title.render('Sokoban', True, (0, 255, 125), (53, 73, 94))
         screen.blit(title, (120, 100))
         demo = font_choice.render('Demo', True, (40, 255, 40), (53, 73, 94))
-        screen.blit(demo, (180, 200))
+        screen.blit(demo, (180, 150))
         library = font_choice.render('Library', True, (40, 255, 40), (53, 73, 94))
-        screen.blit(library, (175, 250))
-        random = font_choice.render('Random', True, (40, 255, 40), (53, 73, 94))
-        screen.blit(random, (168, 300))
+        screen.blit(library, (175, 200))
+        random_slow = font_choice.render('Random Slow', True, (40, 255, 40), (53, 73, 94))
+        screen.blit(random_slow, (140, 250))
+        random_fast = font_choice.render('Random Fast', True, (40, 255, 40), (53, 73, 94))
+        screen.blit(random_fast, (140, 300))
         return_prev = font_choice.render('Return', True, (40, 255, 40), (53, 73, 94))
         screen.blit(return_prev, (170, 350))
         
@@ -185,16 +191,20 @@ def SelectMapMenu(game_mode):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse = pygame.mouse.get_pos()
                 # If the user click the "Demo" button
-                if 180 <= mouse[0] <= 240 and 200 <= mouse[1] <= 232:
+                if 180 <= mouse[0] <= 240 and 150 <= mouse[1] <= 182:
                     GamePlayMenu(game_mode=game_mode, map_mode="demo")
                     end = True
                 # If the user click the "Library" button
-                if 175 <= mouse[0] <= 255 and 250 <= mouse[1] <= 282:
+                if 175 <= mouse[0] <= 255 and 200 <= mouse[1] <= 232:
                     GamePlayMenu(game_mode=game_mode, map_mode="library")
                     end = True
-                # If the user click the "Random" button
-                if 168 <= mouse[0] <= 243 and 300 <= mouse[1] <= 332:
-                    GamePlayMenu(game_mode=game_mode, map_mode="random")
+                # If the user click the "Random Slow" button
+                if 140 <= mouse[0] <= 320 and 250 <= mouse[1] <= 282:
+                    GamePlayMenu(game_mode=game_mode, map_mode="random_slow")
+                    end = True
+                # If the user click the "Random Fast" button
+                if 140 <= mouse[0] <= 320 and 300 <= mouse[1] <= 332:
+                    GamePlayMenu(game_mode=game_mode, map_mode="random_fast")
                     end = True
                 # If the user click the "Return" button
                 if 170 <= mouse[0] <= 240 and 350 <= mouse[1] <= 382:
@@ -207,6 +217,8 @@ def GamePlayMenu(game_mode, map_mode):
     """
     Set the game playing menu for sokoban
     """
+    global animPtr
+    
     # Load sound effects for different kinds of actions
     push = pygame.mixer.Sound(os.path.join(ASSETS_FOLDER, "push.wav"))
     footstep = pygame.mixer.Sound(os.path.join(ASSETS_FOLDER, "footstep.wav"))
@@ -223,11 +235,11 @@ def GamePlayMenu(game_mode, map_mode):
     pygame.display.set_icon(icon)
     # Set map and search button
     initial_game_map = Map(game_mode=game_mode, map_mode=map_mode)
-    current_game_map = copy.deepcopy(initial_game_map)
+    current_game_map = initial_game_map.copy_map()
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         
         # React according to the user behavior
         for event in pygame.event.get():
@@ -243,7 +255,7 @@ def GamePlayMenu(game_mode, map_mode):
                         action = (-1, 0)
                     elif event.key == pygame.K_RIGHT:
                         action = (1, 0)
-                    if current_game_map.is_vaild_move(action):
+                    if current_game_map.is_valid_move(action):
                         if current_game_map.map_matrix[current_game_map.player[1] + action[1]][current_game_map.player[0] + action[0]] == 0:
                             pygame.mixer.Sound.play(footstep)
                             pygame.mixer.music.stop()
@@ -258,24 +270,40 @@ def GamePlayMenu(game_mode, map_mode):
                 mouse = pygame.mouse.get_pos()
                 # If the user click the "bfs" button
                 if 45.5 <= mouse[0] <= 123.5 and 360 <= mouse[1] <= 393:
-                    bfs_game_map = copy.deepcopy(initial_game_map)
+                    bfs_game_map = initial_game_map.copy_map()
                     solution, search_time = bfs_search(bfs_game_map)
+                    if solution:
+                        current_game_map = initial_game_map.copy_map()
+                        t = Thread(target=auto_move, args=(screen, current_game_map, solution))
+                        t.start()
+                        t.join()
+                    else:
+                        FailMenu()
+                        end = True
                 # If the user click the "astar" button
                 if 169 <= mouse[0] <= 247 and 360 <= mouse[1] <= 393:
-                    astar_game_map = copy.deepcopy(initial_game_map)
+                    astar_game_map = initial_game_map.copy_map()
                     solution, search_time = astar_search(astar_game_map)
+                    if solution:
+                        current_game_map = initial_game_map.copy_map()
+                        t = Thread(target=auto_move, args=(screen, current_game_map, solution))
+                        t.start()
+                        t.join()
+                    else:
+                        FailMenu()
+                        end = True
                 # If the user click the "dfs" button
                 if 292.5 <= mouse[0] <= 370.5 and 360 <= mouse[1] <= 393:
-                    dfs_game_map = copy.deepcopy(initial_game_map)
+                    dfs_game_map = initial_game_map.copy_map()
                     solution, search_time = dfs_search(dfs_game_map)
-                if solution:
-                    current_game_map = copy.deepcopy(initial_game_map)
-                    t = Thread(target=auto_move, args=(screen, current_game_map, solution))
-                    t.start()
-                    t.join()
-                else:
-                    FailMenu()
-                    end = True
+                    if solution:
+                        current_game_map = initial_game_map.copy_map()
+                        t = Thread(target=auto_move, args=(screen, current_game_map, solution))
+                        t.start()
+                        t.join()
+                    else:
+                        FailMenu()
+                        end = True
             if current_game_map.is_success():
                 SuccessMenu(len(current_game_map.move_sequence), search_time)
                 end = True
@@ -308,15 +336,15 @@ def SuccessMenu(step, time=None):
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         # Set the main interface
         screen.blit(pygame.transform.scale(solve, (80, 80)), (168, 10))
         font_choice = pygame.font.SysFont('Cascadia mono', 32)
-        step = font_choice.render(f'{step} step', True, (40, 255, 40), (53, 73, 94))
-        screen.blit(step, (160, 200))
+        search_step = font_choice.render(f'{step} steps', True, (40, 255, 40), (53, 73, 94))
+        screen.blit(search_step, (150, 200))
         if time:
-            time = font_choice.render(f'{time} s', True, (40, 255, 40), (53, 73, 94))
-            screen.blit(time, (160, 200))
+            search_time = font_choice.render(f'{time} s', True, (40, 255, 40), (53, 73, 94))
+            screen.blit(search_time, (60, 250))
         play_again = font_choice.render('Play Again', True, (40, 255, 40), (53, 73, 94))
         screen.blit(play_again, (160, 350))
         
@@ -327,7 +355,7 @@ def SuccessMenu(step, time=None):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse = pygame.mouse.get_pos()
                 # If the user click the "Play Again" button
-                if 160 <= mouse[0] <= 250 and 350 <= mouse[1] <= 382:
+                if 160 <= mouse[0] <= 300 and 350 <= mouse[1] <= 382:
                     StartMenu()
                     end = True
                     
@@ -350,17 +378,17 @@ def FailMenu():
     
     while not end:
         # Set frame rate
-        clock.tick(24)
+        clock.tick(60)
         # Set the main interface
         screen.blit(pygame.transform.scale(fail, (80, 80)), (168, 10))
         font_title = pygame.font.SysFont('Cascadia mono', 64)
         font_choice = pygame.font.SysFont('Cascadia mono', 32)
         title = font_title.render('Failed!', True, (0, 255, 125), (53, 73, 94))
-        screen.blit(title, (120, 100))
+        screen.blit(title, (140, 100))
         play_again = font_choice.render('Play Again', True, (40, 255, 40), (53, 73, 94))
-        screen.blit(play_again, (165, 200))
+        screen.blit(play_again, (150, 200))
         quit = font_choice.render('Quit', True, (40, 255, 40), (53, 73, 94))
-        screen.blit(quit, (148, 250))
+        screen.blit(quit, (180, 250))
         
         # React according to the user behavior
         for event in pygame.event.get():
@@ -369,11 +397,11 @@ def FailMenu():
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse = pygame.mouse.get_pos()
                 # If the user click the "Play Again" button
-                if 165 <= mouse[0] <= 260 and 200 <= mouse[1] <= 232:
+                if 150 <= mouse[0] <= 260 and 200 <= mouse[1] <= 232:
                     StartMenu()
                     end = True
                 # If the user click the "Quit" button
-                if 148 <= mouse[0] <= 272 and 250 <= mouse[1] <= 282:
+                if 180 <= mouse[0] <= 230 and 250 <= mouse[1] <= 282:
                     end = True
                     
         pygame.display.update()
@@ -382,6 +410,8 @@ def draw_map(screen, game_map):
     """
     Set the game map
     """
+    global animPtr
+    
     # load images
     # Image for botton
     aStarBtn = pygame.image.load(os.path.join(ASSETS_FOLDER, "aStarBtn.png"))
@@ -417,9 +447,12 @@ def draw_map(screen, game_map):
     charS = pygame.image.load(os.path.join(ASSETS_FOLDER, "charS.png"))
     char = (pygame.image.load(os.path.join(ASSETS_FOLDER, "char1.png")), pygame.image.load(os.path.join(ASSETS_FOLDER, "char2.png")))
     
-    x = (416 - 32 * game_map.size[1]) // 2
+    # For "one" game mode id of holes and boxes
+    font_id = pygame.font.SysFont('Cascadia mono', 16)
+    
     y = (416 - 32 * game_map.size[0]) // 2
     for i in range(game_map.size[0]):
+        x = (416 - 32 * game_map.size[1]) // 2
         for j in range(game_map.size[1]):
             if game_map.map_matrix[i][j] == 0:
                 # Open place
@@ -440,9 +473,9 @@ def draw_map(screen, game_map):
                 wall_type = get_wall_faces(game_map.map_matrix, (j, i))
                 if len(wall_type) == 1:
                     if (i + j) % 2 == 0:
-                        screen.bilt(td[(i * j) % 2], (x, y))
+                        screen.blit(td[(i * j) % 2], (x, y))
                     else:
-                        screen.bilt(tl[(i * j) % 2], (x, y))
+                        screen.blit(tl[(i * j) % 2], (x, y))
                     if (1, 0) in wall_type:
                         screen.blit(wl, (x, y))
                     elif (-1, 0) in wall_type:
@@ -453,9 +486,9 @@ def draw_map(screen, game_map):
                         screen.blit(wb, (x, y))
                 elif len(wall_type) == 2:
                     if (i + j) % 2 == 0:
-                        screen.bilt(td[(i * j) % 2], (x, y))
+                        screen.blit(td[(i * j) % 2], (x, y))
                     else:
-                        screen.bilt(tl[(i * j) % 2], (x, y))
+                        screen.blit(tl[(i * j) % 2], (x, y))
                     if (1, 0) in wall_type:
                         if (0, 1) in wall_type:
                             screen.blit(wlt, (x, y))
@@ -472,9 +505,9 @@ def draw_map(screen, game_map):
                         screen.blit(wlr, (x, y))
                 elif len(wall_type) == 3:
                     if (i + j) % 2 == 0:
-                        screen.bilt(td[(i * j) % 2], (x, y))
+                        screen.blit(td[(i * j) % 2], (x, y))
                     else:
-                        screen.bilt(tl[(i * j) % 2], (x, y))
+                        screen.blit(tl[(i * j) % 2], (x, y))
                     if (1, 0) not in wall_type:
                         screen.blit(w3r, (x, y))
                     elif (-1, 0) not in wall_type:
@@ -485,9 +518,9 @@ def draw_map(screen, game_map):
                         screen.blit(w3t, (x, y))
                 elif len(wall_type) == 4:
                     if (i + j) % 2 == 0:
-                        screen.bilt(td[(i * j) % 2], (x, y))
+                        screen.blit(td[(i * j) % 2], (x, y))
                     else:
-                        screen.bilt(tl[(i * j) % 2], (x, y))
+                        screen.blit(tl[(i * j) % 2], (x, y))
                     screen.blit(w4, (x, y))
             elif game_map.map_matrix[i][j] == 2:
                 if (i + j) % 2 == 0:
@@ -500,6 +533,14 @@ def draw_map(screen, game_map):
                         screen.blit(tls[(i * j) % 2], (x, y))
                     else:
                         screen.blit(tl[(i * j) % 2], (x, y))
+                if(game_map.game_mode == "one"):
+                    id = "A"
+                    for hole_id in game_map.holes:
+                        if game_map.holes[hole_id] == (j, i):
+                            id = hole_id
+                            break
+                    symbol = font_id.render(f'{id}', True, (40, 255, 40), (53, 73, 94))
+                    screen.blit(symbol, (x, y))
                 if (game_map.player[1] == i - 1) and (game_map.player[0] == j):
                     screen.blit(charS, (x, y))
                 screen.blit(coin[animPtr % 8], (x, y))
@@ -515,6 +556,14 @@ def draw_map(screen, game_map):
                     else:
                         screen.blit(tl[(i * j) % 2], (x, y))
                 screen.blit(crate, (x, y))
+                if(game_map.game_mode == "one"):
+                    id = "A"
+                    for box_id in game_map.boxes:
+                        if game_map.boxes[box_id] == (j, i):
+                            id = box_id
+                            break
+                    symbol = font_id.render(f'{id}', True, (40, 255, 40), (53, 73, 94))
+                    screen.blit(symbol, (x, y))
             elif game_map.map_matrix[i][j] == 4:
                 if (i + j) % 2 == 0:
                     if game_map.map_matrix[i - 1][j] == 1:
@@ -527,6 +576,14 @@ def draw_map(screen, game_map):
                     else:
                         screen.blit(tl[(i * j) % 2], (x, y))
                 screen.blit(treasure, (x, y))
+                if(game_map.game_mode == "one"):
+                    id = "A"
+                    for box_id in game_map.boxes:
+                        if game_map.boxes[box_id] == (j, i):
+                            id = box_id
+                            break
+                    symbol = font_id.render(f'{id}', True, (40, 255, 40), (53, 73, 94))
+                    screen.blit(symbol, (x, y))
             if (game_map.player[1] == i) and (game_map.player[0] == j):
                 screen.blit(char[animPtr % 2], (x, y))
             x += 32

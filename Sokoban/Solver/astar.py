@@ -1,24 +1,24 @@
 import time
-import copy
 from queue import PriorityQueue
 
-from ..map import Map
-from utils import *
+def is_in(current_map, map_q):
+    for map in map_q:
+        if (current_map.player == map.player) and ((current_map.map_matrix == map.map_matrix).all()):
+            return True
+    return False
 
 def astar_search(game_map):
-    time_limit = 180
-    
     map_q = PriorityQueue()
     map_q.put((game_map.cost(), id(game_map), game_map))
     visited_map = []
     visited_map.append(game_map)
     start_time = time.time()
-    while time.time < start_time + time_limit:
+    while not map_q.empty():
         prev_map = map_q.get()[2]
         if prev_map.is_success():
-            return prev_map.move_sequence, time.tiem - start_time
-        for action in prev_map.vaild_moves():
-            next_map = copy.deepcopy(prev_map)
+            return prev_map.move_sequence, time.time() - start_time
+        for action in prev_map.valid_moves():
+            next_map = prev_map.copy_map()
             next_map.move(action)
             if not is_in(next_map, visited_map):
                 visited_map.append(next_map)
@@ -41,8 +41,8 @@ def astar_test(game_map, time_limit, step_limit):
         prev_map = map_q.get()[2]
         if prev_map.is_success():
             return prev_map.move_sequence
-        for action in prev_map.vaild_moves():
-            next_map = copy.deepcopy(prev_map)
+        for action in prev_map.valid_moves():
+            next_map = prev_map.copy_map()
             next_map.move(action)
             if not is_in(next_map, visited_map):
                 visited_map.append(next_map)

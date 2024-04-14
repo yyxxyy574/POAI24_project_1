@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 import json
 import random
 import itertools
@@ -13,20 +14,30 @@ class Map:
         self.walls = set()
         self.holes = dict()
         self.boxes = dict()
-        self.player = player
+        self.player = (0, 0)
+        self.map_matrix = None
         
         # Get map information given game mode and map mode
         if map_mode == "demo":
-            size, walls, holes, boxes, player = Map.read_json('.\Maps\map_0.json')
+            size, walls, holes, boxes, player = read_json('.\Maps\map_0.json')
             self.build_from_map_info(size, walls, holes, boxes, player)
-        if map_mode == "library":
-            id = random.randint(0, 3)
-            size, walls, holes, boxes, player = Map.read_json(f'.\Maps\map_{id}.json')
+        elif map_mode == "library":
+            id = random.randint(0, 2)
+            size, walls, holes, boxes, player = read_json(f'.\Maps\map_{id}.json')
             self.build_from_map_info(size, walls, holes, boxes, player)
-        if map_mode == "random":
-            self.random_build(game_mode=game_mode)
+        elif map_mode == "random_slow":
+            self.random_build_slow()
+        elif map_mode == "random_fast":
+            self.random_build_fast()
+            
+    def print_map(self):
+        for i in range(self.size[0]):
+            for j in range(self.size[1]):
+                print(self.map_matrix[i][j], end=' ')
+            print()
+        print(self.player)           
                 
-    def build_from_map_info(self, size=(0, 0), walls=set(), holes=[], boxes=[], player=(0, 0)):
+    def build_from_map_info(self, size=(0, 0), walls=set(), holes=dict(), boxes=dict(), player=(0, 0)):
         """
         Build map according to map information
         """
@@ -48,29 +59,29 @@ class Map:
             if self.map_matrix[box_pos[1]][box_pos[0]] == 0:
                 self.map_matrix[box_pos[1]][box_pos[0]] = 3
             else:
-                self.map_matrix[box_pos[1]][box_pos[0]] = 4  
+                self.map_matrix[box_pos[1]][box_pos[0]] = 4 
                 
-    def is_vaild_move(self, action):
-        new_player = (self.player[0] + action[0], self.palyer[1] + action[1])
+    def is_valid_move(self, action):
+        new_player = (self.player[0] + action[0], self.player[1] + action[1])
         if self.map_matrix[new_player[1]][new_player[0]] in (3, 4):
             new_box_pos = (self.player[0] + 2 * action[0], self.player[1] + 2 * action[1])
             return self.map_matrix[new_box_pos[1]][new_box_pos[0]] in (0, 2)
         else:
             return self.map_matrix[new_player[1]][new_player[0]] in (0, 2)
         
-    def vaild_moves(self):
+    def valid_moves(self):
         available_moves = [(0, -1), (-1, 0), (0, 1), (1, 0)]
-        vaild_moves = []
+        valid_moves = []
         for action in available_moves:
-            if self.is_valid_pos(action):
-                vaild_moves.append(action)
-        return vaild_moves
+            if self.is_valid_move(action):
+                valid_moves.append(action)
+        return valid_moves
     
     def move(self, action):
-        if not self.is_vaild_move(action):
+        if not self.is_valid_move(action):
             return False
         self.move_sequence.append(action)
-        self.player = (self.player[0] + action[0], self.palyer[1] + action[1])
+        self.player = (self.player[0] + action[0], self.player[1] + action[1])
         if self.map_matrix[self.player[1]][self.player[0]] in (3, 4):
             box_id = None
             for box in self.boxes:
@@ -103,7 +114,7 @@ class Map:
                         
     def cost(self):
         cost = 0
-        if self.mode == "all":
+        if self.game_mode == "all":
             sorted_holes_x = sorted(self.holes[hole][0] for hole in self.holes)
             sorted_holes_y = sorted(self.holes[hole][1] for hole in self.holes)
             sorted_boxes_x = sorted(self.boxes[box][0] for box in self.boxes)
@@ -209,14 +220,18 @@ class Map:
             failures += failures_3
         if len(empty_boxes) > 3:
             failures += failures_4
-        for empty_box in empty_boxes:
-            empty_box_pos = empty_boxes[empty_box]
+        for i in range(len(empty_boxes[0])):
+            empty_box_pos = (empty_boxes[1][i], empty_boxes[0][i])
             is_fail = False
             for failure in failures:
                 is_same = True
                 for surround in failure:
                     if failure[surround] == 0:
                         if self.map_matrix[empty_box_pos[1] + surround[1]][empty_box_pos[0] + surround[0]] not in (3, 4):
+                            is_same = False
+                            break
+                    else:
+                        if self.map_matrix[empty_box_pos[1] + surround[1]][empty_box_pos[0] + surround[0]] != 1:
                             is_same = False
                             break
                 if is_same:
@@ -240,18 +255,18 @@ class Map:
         self.map_matrix = np.zeros(self.size)
         # Surrounded by walls
         self.map_matrix[0, :] = 1
-        self.walls.append(list(itertools.product(list(range(0, self.size[1])), [0])))
+        self.walls.add(wall for wall in list(itertools.product(list(range(0, self.size[1])), [0])))
         self.map_matrix[:, 0] = 1
-        self.walls.append(list(itertools.product([0], list(range(0, self.size[0])))))
+        self.walls.add(wall for wall in list(itertools.product([0], list(range(0, self.size[0])))))
         self.map_matrix[-1, :] = 1
-        self.walls.append(list(itertools.product(list(range(0, self.size[1])), [self.size[0] - 1])))
+        self.walls.add(wall for wall in list(itertools.product(list(range(0, self.size[1])), [self.size[0] - 1])))
         self.map_matrix[:, -1] = 1
-        self.walls.append(list(itertools.product([self.size[1] - 1], list(range(0, self.size[0])))))
+        self.walls.add(wall for wall in list(itertools.product([self.size[1] - 1], list(range(0, self.size[0])))))
         # Random walls
-        not_occupied = list(itertools.product(list(range(1, self.size[0] - 1)), list(range(1, self.size[1] - 1))))
-        for wall in random.sample(not_occupied, self.size):
+        not_occupied = list(itertools.product(list(range(1, self.size[1] - 1)), list(range(1, self.size[0] - 1))))
+        for wall in random.sample(not_occupied, (self.size[0] + self.size[1]) // 2):
             self.map_matrix[wall[1]][wall[0]] = 1
-            self.walls.append(wall)
+            self.walls.add(wall)
         not_occupied = list(set(not_occupied) - self.walls)
         # Random holes
         for i in range(box_num):
@@ -279,8 +294,8 @@ class Map:
                     else:
                         # If there isn't a hole
                         self.map_matrix[box[1]][box[0]] = 3
-                        
-                    if self.is_dead():
+                    
+                    if self.is_fail():
                         # If this map is dead, then recover
                         if self.map_matrix[box[1]][box[0]] == 4:
                             self.map_matrix[box[1]][box[0]] = 2
@@ -288,23 +303,65 @@ class Map:
                             self.map_matrix[box[1]][box[0]] = 0
                     else:
                         # If this map is OK, then go on
+                        self.boxes[chr(65 + i)] = box
                         break
         not_occupied = list(set(not_occupied) - set(self.boxes.values()))
         # Random player position
         while True:
             self.player = random.choice(not_occupied)
             
-            if not is_surrounded(self.map_matrix, self.player_pos):
+            if not is_surrounded(self.map_matrix, self.player):
                 break
-            
-    def random_build(self, time_limit=20, step_limit=100):
+    
+    def random_build_fast(self, time_limit=30, step_limit=100):
         """
         Build a map randomly
         """
         # Initialize an easy map
         while True:
             self.random_initialize()
-            result = astar_test(self, time_limit, step_limit)
+            result = astar_test(self.copy_map(), 10, 150)
+            if not result in range(3):
+                break
+            
+        # Add walls randomly to make the map more difficult
+        traceback = 0
+        while True:
+            open_places = np.where(self.map_matrix == 0)
+            if len(open_places[0]) == 0:
+                break
+            
+            while True:
+                id = random.randint(0, len(open_places[0]) - 1)
+                if (open_places[1][id] != self.player[0]) or (open_places[0][id] != self.player[1]):
+                    self.map_matrix[open_places[0][id]][open_places[1][id]] = 1
+                    if not(self.is_fail()):
+                        break
+                    self.map_matrix[open_places[0][id]][open_places[1][id]] = 0
+            result = astar_test(self.copy_map(), time_limit, step_limit)
+            if result == 0:
+                # If no solution, return to previous map
+                traceback += 1
+                self.map_matrix[open_places[0][id]][open_places[1][id]] = 0
+                if traceback > 3:
+                    break
+            elif result == 1:
+                # If it is beyond time, add this wall
+                self.walls.add((open_places[0][id], open_places[1][id]))
+                break
+            elif result == 2:
+                # If it is beyond step, keep current map
+                self.walls.add((open_places[0][id], open_places[1][id]))
+                continue
+            
+    def random_build_slow(self, time_limit=30, step_limit=100):
+        """
+        Build a map randomly
+        """
+        # Initialize an easy map
+        while True:
+            self.random_initialize()
+            result = astar_test(self.copy_map(), 20, 200)
             if not result in range(3):
                 break
         
@@ -317,39 +374,59 @@ class Map:
             
             while True:
                 id = random.randint(0, len(open_places[0]) - 1)
-                if (open_places[0][id] != self.player_pos[0]) or (open_places[1][id] != self.player_pos[1]):
-                    self.map_matrix[open_places[1][id]][open_places[0][id]] = 1
-                    # self.walls.add((open_places[0][id], open_places[0][id]))
+                if (open_places[1][id] != self.player[0]) or (open_places[0][id] != self.player[1]):
+                    self.map_matrix[open_places[0][id]][open_places[1][id]] = 1
                     if not(self.is_fail()):
                         break
-                    self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
-            result = astart_test(copy.deepcopy(self), time_limit, step_limit)
+                    self.map_matrix[open_places[0][id]][open_places[1][id]] = 0
+            result = astar_test(self.copy_map(), time_limit, step_limit)
             if result == 0:
                 # If no solution, return to previous map
                 traceback += 1
-                self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
+                self.map_matrix[open_places[0][id]][open_places[1][id]] = 0
                 if traceback > 3:
                     break
             elif result == 1:
                 # If it is beyond time, add this wall
-                self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
-                continue
+                self.walls.add((open_places[0][id], open_places[1][id]))
+                break
             elif result == 2:
                 # If it is beyond step, keep current map
-                self.map_matrix[open_places[1][id]][open_places[0][id]] = 0
-                break
+                self.walls.add((open_places[0][id], open_places[1][id]))
+                continue
+
+    def copy_map(self):
+        copied_map = Map(game_mode=self.game_mode)
+        copied_map.size = copy.deepcopy(self.size)
+        for wall in self.walls:
+            copied_map.walls.add(wall)
+        copied_map.holes = copy.deepcopy(self.holes)
+        copied_map.boxes = copy.deepcopy(self.boxes)
+        copied_map.player = copy.deepcopy(self.player)
+        copied_map.map_matrix = copy.deepcopy(self.map_matrix)
+        copied_map.move_sequence = copy.deepcopy(self.move_sequence)
+        return copied_map
          
 def read_json(path):
     """
     Read map information from a json file
     """
+    walls = set()
+    holes = dict()
+    boxes = dict()
     with open(path, 'r') as f:
         map_info = json.load(f)
-        size = map_info["size"]
-        walls = map_info["walls"]
-        holes = map_info["holes"]
-        boxes = map_info["boxes"]
-        player = map_info["player"]
+        size = (map_info["size"][0], map_info["size"][1])
+        walls_info = map_info["walls"]
+        for wall_pos in walls_info:
+            walls.add((wall_pos[1], wall_pos[0]))
+        holes_info = map_info["holes"]
+        for hole_id in holes_info:
+            holes[hole_id] = (holes_info[hole_id][1], holes_info[hole_id][0])
+        boxes_info = map_info["boxes"]
+        for box_id in boxes_info:
+            boxes[box_id] = (boxes_info[box_id][1], boxes_info[box_id][0])
+        player = (map_info["player"][1], map_info["player"][0])
     return size, walls, holes, boxes, player
 
 def is_valid_pos(map_matrix, pos):
@@ -363,7 +440,7 @@ def is_surrounded(map_matrix, pos):
     
     surrounded = True
     for surround in surrounds:
-        if is_valid_pos((pos[0] + surround[0], pos[1] + surround[1])):
+        if is_valid_pos(map_matrix, (pos[0] + surround[0], pos[1] + surround[1])):
             if map_matrix[pos[1] + surround[1]][pos[0] + surround[0]] in (0, 2):
                 surrounded = False
     return surrounded
