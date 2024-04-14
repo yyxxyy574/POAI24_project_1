@@ -277,6 +277,7 @@ class Map:
                     # If not surrounded by walls
                     self.map_matrix[hole[1]][hole[0]] = 2
                     self.holes[chr(65 + i)] = hole
+                    not_occupied -= {hole}
                     break
         # Random boxes
         for i in range(box_num):
@@ -304,6 +305,7 @@ class Map:
                     else:
                         # If this map is OK, then go on
                         self.boxes[chr(65 + i)] = box
+                        not_occupied -= {box}
                         break
         not_occupied = list(set(not_occupied) - set(self.boxes.values()))
         # Random player position
