@@ -130,8 +130,13 @@ class Map:
         """
         Judge if is success
         """
-        empty_boxes = np.where(self.map_matrix == 3)
-        if len(empty_boxes[0]) == 0:
+        empty_boxes = copy.deepcopy(self.boxes)
+        if self.game_mode == "all":
+            for box_id in self.boxes:
+                empty_box_pos = empty_boxes[box_id]
+                if self.map_matrix[empty_box_pos[1]][empty_box_pos[0]] == 4:
+                    empty_boxes.pop(box_id)
+        if len(empty_boxes) == 0:
             return True
         else:
             return False 
@@ -210,7 +215,12 @@ class Map:
             {(0, -1): 0, (-1, -1): 0, (-1, 0): 0},
         ]
         
-        empty_boxes = np.where(self.map_matrix == 3)
+        empty_boxes = copy.deepcopy(self.boxes)
+        if self.game_mode == "all":
+            for box_id in self.boxes:
+                empty_box_pos = empty_boxes[box_id]
+                if self.map_matrix[empty_box_pos[1]][empty_box_pos[0]] == 4:
+                    empty_boxes.pop(box_id)
         failures = []
         if len(empty_boxes) > 0:
             failures += failures_1
@@ -220,8 +230,8 @@ class Map:
             failures += failures_3
         if len(empty_boxes) > 3:
             failures += failures_4
-        for i in range(len(empty_boxes[0])):
-            empty_box_pos = (empty_boxes[1][i], empty_boxes[0][i])
+        for box_id in empty_boxes:
+            empty_box_pos = (empty_boxes[box_id][0], empty_boxes[box_id][1])
             is_fail = False
             for failure in failures:
                 is_same = True
@@ -249,7 +259,8 @@ class Map:
         # Random size
         self.size = (random.randint(8, 12), random.randint(8, 12))
         # Random number of boxes
-        box_num = random.randint(1, 4)
+        # box_num = random.randint(1, 4)
+        box_num = 2
         
         # Initial a map
         self.map_matrix = np.zeros(self.size)
@@ -271,18 +282,24 @@ class Map:
         # Random holes
         for i in range(box_num):
             while True:
+                if len(not_occupied) == 0:
+                    self.size = (0, 0)
+                    return
                 hole = random.choice(not_occupied)
                 
                 if not is_surrounded(self.map_matrix, hole):
                     # If not surrounded by walls
                     self.map_matrix[hole[1]][hole[0]] = 2
                     self.holes[chr(65 + i)] = hole
-                    not_occupied -= {hole}
+                    not_occupied = list(set(not_occupied) - {hole})
                     break
         # Random boxes
         for i in range(box_num):
             while True:
                 box = random.choice(not_occupied)
+                if len(not_occupied) == 0:
+                    self.size = (0, 0)
+                    return
                 
                 if not is_surrounded(self.map_matrix, box):
                     # If not surrounded by walls
@@ -305,11 +322,13 @@ class Map:
                     else:
                         # If this map is OK, then go on
                         self.boxes[chr(65 + i)] = box
-                        not_occupied -= {box}
+                        not_occupied = list(set(not_occupied) - {box})
                         break
-        not_occupied = list(set(not_occupied) - set(self.boxes.values()))
         # Random player position
         while True:
+            if len(not_occupied) == 0:
+                self.size = (0, 0)
+                return
             self.player = random.choice(not_occupied)
             
             if not is_surrounded(self.map_matrix, self.player):
@@ -322,6 +341,8 @@ class Map:
         # Initialize an easy map
         while True:
             self.random_initialize()
+            if self.size == (0, 0):
+                continue
             result = astar_test(self.copy_map(), 10, 150)
             if not result in range(3):
                 break
