@@ -78,16 +78,20 @@ class Map:
         if not self.is_valid_move(action):
             return False
         self.move_sequence.append(action)
+        # Player position after moving
         self.player = (self.player[0] + action[0], self.player[1] + action[1])
         if self.map_matrix[self.player[1]][self.player[0]] in (3, 4):
+            # If push a box
             box_id = None
             for box in self.boxes:
                 if self.boxes[box] == self.player:
                     box_id = box
                     break
             if self.map_matrix[self.player[1]][self.player[0]] == 3:
+                # If it's a box with a hole
                 self.map_matrix[self.player[1]][self.player[0]] = 0
             else:
+                # If it's a box without a hole
                 self.map_matrix[self.player[1]][self.player[0]] = 2
             new_box_pos = (self.player[0] + action[0], self.player[1] + action[1])
             if self.map_matrix[new_box_pos[1]][new_box_pos[0]] == 0:
@@ -98,12 +102,14 @@ class Map:
                     self.map_matrix[new_box_pos[1]][new_box_pos[0]] = 4
                     self.boxes[box_id] = new_box_pos
                 else:
+                    # Under "one" game mode, when box has been pushed into a hole
                     hole_id = None
                     for hole in self.holes:
                         if self.holes[hole] == new_box_pos:
                             hole_id = hole
                             break
                     if box_id == hole_id:
+                        # Box disappears
                         self.boxes.pop(box_id)
                     else:
                         self.map_matrix[new_box_pos[1]][new_box_pos[0]] = 4
@@ -131,6 +137,7 @@ class Map:
         if self.game_mode == "all":
             for box_id in self.boxes:
                 empty_box_pos = empty_boxes[box_id]
+                # Exclude boxes that are already in holes
                 if self.map_matrix[empty_box_pos[1]][empty_box_pos[0]] == 4:
                     empty_boxes.pop(box_id)
         if len(empty_boxes) == 0:
@@ -213,11 +220,6 @@ class Map:
         ]
         
         empty_boxes = copy.deepcopy(self.boxes)
-        if self.game_mode == "all":
-            for box_id in self.boxes:
-                empty_box_pos = empty_boxes[box_id]
-                if self.map_matrix[empty_box_pos[1]][empty_box_pos[0]] == 4:
-                    empty_boxes.pop(box_id)
         failures = []
         if len(empty_boxes) > 0:
             failures += failures_1
@@ -227,6 +229,11 @@ class Map:
             failures += failures_3
         if len(empty_boxes) > 3:
             failures += failures_4
+        if self.game_mode == "all":
+            for box_id in self.boxes:
+                empty_box_pos = empty_boxes[box_id]
+                if self.map_matrix[empty_box_pos[1]][empty_box_pos[0]] == 4:
+                    empty_boxes.pop(box_id)
         for box_id in empty_boxes:
             empty_box_pos = (empty_boxes[box_id][0], empty_boxes[box_id][1])
             is_fail = False
